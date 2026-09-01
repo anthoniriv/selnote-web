@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="280" viewBox="0 0 1000 280" role="img" aria-labelledby="title desc">
+  <title id="title">NotesChain</title>
+  <desc id="desc">Notas cifradas y sincronizadas directamente entre dispositivos</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#111827"/>
+      <stop offset="1" stop-color="#17142c"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#38bdf8"/>
+      <stop offset="1" stop-color="#a78bfa"/>
+    </linearGradient>
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="6" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <rect width="1000" height="280" rx="14" fill="url(#bg)"/>
+  <path d="M0 232C180 182 260 276 454 218s291-63 546-12v74H0z" fill="#0b1020" opacity=".72"/>
+  <g opacity=".12" fill="none" stroke="#93c5fd">
+    <path d="M650 30h260M650 54h190M650 78h230M650 102h150"/>
+  </g>
+  <g transform="translate(650 139)" filter="url(#glow)" fill="none" stroke="url(#accent)" stroke-width="3">
+    <path d="M-118 0h62M56 0h62M-78-52l40 34M78-52l-40 34M-78 52l40-34M78 52l-40 34" opacity=".8"/>
+    <rect x="-58" y="-25" width="116" height="50" rx="25" fill="#1d2040"/>
+    <circle cx="-118" cy="0" r="12" fill="#111827"/>
+    <circle cx="118" cy="0" r="12" fill="#111827"/>
+    <circle cx="-78" cy="-52" r="10" fill="#111827"/>
+    <circle cx="78" cy="-52" r="10" fill="#111827"/>
+    <circle cx="-78" cy="52" r="10" fill="#111827"/>
+    <circle cx="78" cy="52" r="10" fill="#111827"/>
+    <path d="M-22-8h44M-22 8h30" stroke="#e0e7ff" stroke-linecap="round"/>
+  </g>
+  <g font-family="Inter,Segoe UI,Arial,sans-serif">
+    <text x="64" y="94" fill="#f8fafc" font-size="52" font-weight="800" letter-spacing="-2">NotesChain</text>
+    <rect x="66" y="116" width="74" height="5" rx="2.5" fill="url(#accent)"/>
+    <text x="66" y="158" fill="#cbd5e1" font-size="18" letter-spacing="1">notas cifradas · sincronización directa</text>
+    <text x="66" y="187" fill="#94a3b8" font-size="15" letter-spacing="1">LOCAL-FIRST · E2E · SIN CUENTAS</text>
+  </g>
+</svg>
