@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/banner.svg" alt="NotesChain — notas cifradas y sincronización directa" width="100%">
+  <img src="assets/banner.svg" alt="Selnote — notas cifradas y sincronización directa" width="100%">
 </p>
 
 <p align="center">
@@ -15,14 +15,16 @@
 </p>
 
 <p align="center">
-  <img src="screenshot.png" alt="Interfaz visual de NotesChain" width="600">
+  <img src="screenshot.png" alt="Interfaz visual de Selnote" width="600">
 </p>
 
 ---
 
 ## Qué hace
 
-NotesChain está pensado para conservar notas y archivos bajo tu control: cifra los datos en el dispositivo, guarda una copia local y replica los cambios directamente entre dispositivos emparejados. La interfaz convierte el conjunto de notas en un mapa visual para navegar el contenido y entender qué dispositivos forman parte del cerebro.
+Selnote está pensado para conservar notas y archivos bajo tu control: cifra los datos en el dispositivo, guarda una copia local y replica los cambios directamente entre dispositivos emparejados. La interfaz convierte el conjunto de notas en un mapa visual para navegar el contenido y entender qué dispositivos forman parte del cerebro.
+
+El cambio de nombre a Selnote conserva la base de datos local y el espacio de descubrimiento usados por versiones anteriores. Actualizar la aplicación no migra ni borra las notas existentes, y los dispositivos ya emparejados continúan compartiendo el mismo protocolo.
 
 ## Funcionalidades principales
 

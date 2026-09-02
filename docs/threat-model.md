@@ -2,7 +2,7 @@
 
 ## Objetivo
 
-NotesChain busca mantener notas y adjuntos cifrados en el navegador y replicarlos entre dispositivos autorizados. No promete ocultar toda la actividad de red ni recuperar información borrada del almacenamiento del usuario.
+Selnote busca mantener notas y adjuntos cifrados en el navegador y replicarlos entre dispositivos autorizados. No promete ocultar toda la actividad de red ni recuperar información borrada del almacenamiento del usuario.
 
 ## Activos protegidos
 

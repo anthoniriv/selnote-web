@@ -1,6 +1,6 @@
 # Red y despliegue
 
-NotesChain cifra el contenido antes de persistirlo o transferirlo. La red sirve para descubrir pares y transportar bytes cifrados; no reemplaza la verificación criptográfica de la aplicación.
+Selnote cifra el contenido antes de persistirlo o transferirlo. La red sirve para descubrir pares y transportar bytes cifrados; no reemplaza la verificación criptográfica de la aplicación.
 
 ## Rutas de conexión
 
@@ -11,7 +11,7 @@ NotesChain cifra el contenido antes de persistirlo o transferirlo. La red sirve 
 | TURN | Reenvía tráfico cuando no existe ruta directa | Metadatos de conexión y volumen aproximado; transporta bytes cifrados de extremo a extremo. |
 | WebRTC directo | Envía datos entre pares | Los pares conocen sus direcciones candidatas y el flujo de tráfico. |
 
-El cifrado de NotesChain protege el contenido de notas y adjuntos frente a esos intermediarios, pero no elimina la exposición de metadatos de red.
+El cifrado de Selnote protege el contenido de notas y adjuntos frente a esos intermediarios, pero no elimina la exposición de metadatos de red.
 
 ## GitHub Pages y PWA
 
