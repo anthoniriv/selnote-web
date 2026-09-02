@@ -11,7 +11,7 @@
   <img src="https://img.shields.io/badge/JavaScript-vanilla-f7df1e?style=flat&logo=javascript&logoColor=111827" alt="JavaScript vanilla">
   <img src="https://img.shields.io/badge/Web%20Crypto-AES--GCM%20%2B%20Ed25519-38bdf8?style=flat" alt="Web Crypto">
   <img src="https://img.shields.io/badge/WebRTC-P2P-a78bfa?style=flat" alt="WebRTC P2P">
-  <img src="https://img.shields.io/badge/Dependencias-0-22c55e?style=flat" alt="Sin dependencias">
+  <img src="https://img.shields.io/badge/Dependencias%20npm%20de%20ejecución-0-22c55e?style=flat" alt="Sin dependencias npm de ejecución">
 </p>
 
 <p align="center">
@@ -64,7 +64,7 @@ index.html    interfaz, lógica de aplicación y estilos
 assets/       recursos visuales de la documentación
 ```
 
-El archivo de entrada implementa la interfaz, IndexedDB, Web Crypto, WebRTC y la visualización 3D. No hay `package.json`, proceso de compilación ni backend de almacenamiento incluidos en este repositorio.
+El archivo de entrada implementa la interfaz, IndexedDB, Web Crypto, WebRTC y la visualización 3D. El repositorio incluye un `package.json` sin dependencias de ejecución para las verificaciones locales y de CI; no requiere proceso de compilación ni backend de almacenamiento.
 
 | Capa | Tecnología |
 |------|------------|
@@ -75,10 +75,9 @@ El archivo de entrada implementa la interfaz, IndexedDB, Web Crypto, WebRTC y la
 
 ## Ejecución local
 
-Serví el directorio `web` con un servidor de archivos estáticos. Por ejemplo, con Python 3:
+Serví el directorio actual con un servidor de archivos estáticos. Por ejemplo, con Python 3:
 
 ```bash
-cd /Users/anthonirivera/DEV/noteschain/web
 python3 -m http.server 8080
 ```
 
@@ -88,6 +87,23 @@ Abrí [http://localhost:8080](http://localhost:8080). Usar un servidor local, en
 
 - El contenido se almacena localmente en cada navegador; borrar los datos del sitio elimina esa copia.
 - La sincronización depende de que los dispositivos puedan conectarse como pares.
-- El tracker solo facilita el encuentro y la negociación; no es el almacén de notas.
+- El tracker solo facilita el encuentro y la negociación; no es el almacén de notas. Los servicios de tracker, STUN y TURN pueden observar metadatos de red necesarios para establecer la conexión —por ejemplo, direcciones IP, puertos, momento y volumen aproximado del tráfico—, aunque no el contenido cifrado de las notas ni de los adjuntos.
 - Los adjuntos se cifran antes de persistirse y se verifican al recibirse.
 - La transferencia por QR está pensada para notas y cargas pequeñas: el límite práctico depende de la cámara y la velocidad de lectura.
+
+## Comunidad y calidad
+
+- [Guía de contribución](CONTRIBUTING.md)
+- [Código de conducta](CODE_OF_CONDUCT.md)
+- [Política de seguridad](SECURITY.md)
+- [Flujo de integración continua](.github/workflows/ci.yml)
+- [Red y despliegue](docs/networking.md)
+- [Modelo de amenazas](docs/threat-model.md)
+- [Licencia MIT](LICENSE)
+
+Para ejecutar las mismas verificaciones que la CI:
+
+```bash
+npm run check
+npm test
+```
