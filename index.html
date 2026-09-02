@@ -4,7 +4,14 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
 <title>NotesChain</title>
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self' wss:; worker-src 'self';" />
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%9B%93%3C/text%3E%3C/svg%3E" />
+<!-- instalable como app y arranca sin internet (service worker) -->
+<link rel="manifest" href="./manifest.webmanifest" />
+<link rel="apple-touch-icon" href="./icon.svg" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="theme-color" content="#ffffff" />
 <style>
   /* Tema: main BLANCO, tinta negra. */
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -186,6 +193,52 @@
   #devs-list .who { display: flex; flex-direction: column; gap: .15rem; }
   #devs-list .st { color: var(--dim); font-size: .55rem; letter-spacing: .1em; text-transform: uppercase; }
 
+  /* ---- envío por luz (QR animado) ---- */
+  #beam {
+    position: fixed; inset: 0; z-index: 128;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(255,255,255,.92); padding: 1rem;
+  }
+  #beam .sheet {
+    width: min(560px, 96vw); max-height: 92vh; overflow-y: auto; text-align: center;
+    background: var(--bg); border: 1px solid var(--ink); box-shadow: 8px 8px 0 var(--ink);
+    padding: 1.2rem;
+  }
+  #beam h3 { font-size: .78rem; letter-spacing: .18em; text-transform: uppercase; margin-bottom: .7rem; }
+  #beam .hint { font-size: .6rem; color: var(--dim); line-height: 1.7; margin-bottom: .8rem; }
+  /* nítido y sin suavizado: un QR borroso no lo lee ninguna cámara */
+  #beam-canvas { display: block; margin: 0 auto .8rem; image-rendering: pixelated; }
+  #beam-video { width: 100%; max-height: 46vh; margin-bottom: .8rem; background: #000; border: 1px solid var(--line); }
+  #beam .bar { height: 6px; border: 1px solid var(--ink); margin-bottom: .5rem; }
+  #beam .fill { height: 100%; background: var(--ink); width: 0; transition: width .2s; }
+  #beam .row { justify-content: center; }
+
+  /* ---- emparejar sin internet ---- */
+  #pair {
+    position: fixed; inset: 0; z-index: 125;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(255,255,255,.7); backdrop-filter: blur(8px); padding: 1rem;
+  }
+  #pair .sheet {
+    width: min(500px, 94vw); max-height: 88vh; overflow-y: auto;
+    background: var(--bg); border: 1px solid var(--ink); box-shadow: 8px 8px 0 var(--ink);
+    padding: 1.3rem;
+  }
+  #pair h3 { font-size: .78rem; letter-spacing: .18em; text-transform: uppercase; margin-bottom: .7rem; }
+  #pair .hint { font-size: .62rem; color: var(--dim); line-height: 1.7; margin-bottom: .9rem; }
+  #pair textarea {
+    width: 100%; margin-bottom: .5rem; padding: .5rem;
+    font-family: inherit; font-size: .58rem; line-height: 1.5;
+    background: var(--bg); color: var(--ink); border: 1px solid var(--line);
+    word-break: break-all; resize: vertical;
+  }
+  #pair .row { margin-bottom: .6rem; }
+  #pair-state { margin: 0; }
+  /* el QR se pinta como SVG escalable: nítido en cualquier pantalla */
+  #pair-qr { display: flex; justify-content: center; margin-bottom: .7rem; }
+  #pair-qr svg { width: min(240px, 60vw); height: auto; image-rendering: pixelated; }
+  #pair-video { width: 100%; max-height: 40vh; margin-bottom: .6rem; border: 1px solid var(--line); background: #000; }
+
   /* ---- diálogo propio (sustituye a confirm() nativo) ---- */
   #ask {
     position: fixed; inset: 0; z-index: 130;
@@ -303,7 +356,9 @@
 
   /* progreso de transferencia: rectángulo con barra, abajo a la derecha */
   #xfer {
-    position: fixed; right: 1rem; bottom: 1rem; z-index: 75;
+    /* esquina izquierda, por encima del log: la derecha es de los botones
+       flotantes (+, buscar, pegar) y la barra los tapaba */
+    position: fixed; left: 1rem; bottom: 2.6rem; z-index: 75;
     width: min(260px, 70vw);
     background: var(--bg); border: 1px solid var(--ink);
     box-shadow: 4px 4px 0 var(--ink);
@@ -319,9 +374,11 @@
   #xfer .pct { font-weight: 700; }
   #xfer .bar { height: 5px; border: 1px solid var(--ink); }
   #xfer .fill { height: 100%; background: var(--ink); width: 0; transition: width .25s; }
+  /* ruta y velocidad: dice si va directo o por relevo y a qué ritmo */
+  #xfer .row2 { font-size: .55rem; color: var(--dim); margin-top: .3rem; }
 
   @media (max-width: 640px) {
-    #xfer { right: .6rem; bottom: 5.2rem; width: min(220px, 62vw); }
+    #xfer { left: .6rem; bottom: 2.6rem; width: min(220px, 62vw); }
   }
 
   #log {
@@ -344,6 +401,7 @@
   <span id="net">—</span>
   <button id="share" class="ghost" hidden>enlace secreto</button>
   <button id="devices" class="ghost" hidden>dispositivos</button>
+  <button id="offline" class="ghost" hidden>sin internet</button>
   <button id="netoggle" class="ghost" hidden>desconectar</button>
   <button id="forget" class="ghost" hidden>salir</button>
 </div>
@@ -378,6 +436,7 @@
       <small id="v-date"></small>
       <div class="row">
         <button id="v-edit" hidden>editar</button>
+        <button id="v-beam" class="ghost">enviar por luz</button>
         <button id="v-del" class="ghost" hidden>borrar</button>
         <button id="v-close" class="ghost">cerrar</button>
       </div>
@@ -410,6 +469,45 @@
   </div>
 </div>
 
+<div id="beam" hidden>
+  <div class="sheet">
+    <h3>enviar por luz</h3>
+    <p class="hint">Sin WiFi, sin datos, sin Bluetooth: la nota sale por la pantalla como códigos QR y entra por la cámara del otro. Pon los dispositivos frente a frente y no los muevas. Tope 2 MB — a esta velocidad, más es una eternidad.</p>
+    <canvas id="beam-canvas" hidden></canvas>
+    <video id="beam-video" hidden playsinline muted></video>
+    <div class="bar"><div class="fill" id="beam-fill"></div></div>
+    <p class="hint" id="beam-state"></p>
+    <div class="row">
+      <button id="beam-recv">recibir</button>
+      <button id="beam-close" class="ghost">cerrar</button>
+    </div>
+  </div>
+</div>
+
+<div id="pair" hidden>
+  <div class="sheet">
+    <h3>emparejar sin internet</h3>
+    <p class="hint">Los dos dispositivos en la misma WiFi. No hace falta salida a internet ni el tracker: se conectan directo por la red local, a velocidad de LAN.</p>
+    <p class="hint"><b>1.</b> Aquí: genera la invitación y llévala al otro dispositivo (copiar y pegar, AirDrop, compartir).<br /><b>2.</b> Allá: pégala abajo — devuelve una respuesta.<br /><b>3.</b> Aquí otra vez: pega esa respuesta abajo. Listo.</p>
+    <div class="row"><button id="pair-make">generar invitación</button></div>
+    <div id="pair-qr" hidden></div>
+    <textarea id="pair-out" rows="3" readonly hidden spellcheck="false"></textarea>
+    <div class="row" id="pair-out-actions" hidden>
+      <button id="pair-copy" class="ghost">copiar</button>
+      <button id="pair-share" class="ghost" hidden>compartir</button>
+    </div>
+    <video id="pair-video" hidden playsinline muted></video>
+    <textarea id="pair-in" rows="3" placeholder="pega aquí el código del otro dispositivo…" spellcheck="false"></textarea>
+    <div class="row">
+      <button id="pair-use">usar código</button>
+      <button id="pair-scan" class="ghost" hidden>escanear QR</button>
+      <button id="pair-beam" class="ghost">recibir por luz</button>
+      <button id="pair-close" class="ghost">cerrar</button>
+    </div>
+    <p class="hint" id="pair-state"></p>
+  </div>
+</div>
+
 <div id="ask" hidden>
   <div class="sheet">
     <h3 id="ask-title"></h3>
@@ -433,6 +531,7 @@
 <div id="xfer" hidden>
   <div class="row1"><span class="name" id="xfer-name"></span><span class="pct" id="xfer-pct"></span></div>
   <div class="bar"><div class="fill" id="xfer-fill"></div></div>
+  <div class="row2" id="xfer-info"></div>
 </div>
 
 <div id="toasts"></div>
@@ -449,6 +548,13 @@
    - Integridad: cadena de bloques firmada Ed25519 por el owner.
    - UI: el cerebro ES la interfaz. Cada nota = neurona en una rama.
    ============================================================ */
+import {
+  isValidBinaryChunkLength,
+  isValidBlobChunk,
+  isValidBlobStart,
+  parseP2PMessage,
+} from './scripts/p2p-validation.mjs';
+
 const $ = (id) => document.getElementById(id);
 const log = (m) => { $('log').textContent = m; console.log('[noteschain]', m); };
 
@@ -781,11 +887,23 @@ const hasBlob = async (hash) => Boolean(await getBlobRec(hash));
    · una transferencia interrumpida se reanuda por donde iba;
    · se pueden pedir fragmentos distintos a peers distintos (multi-fuente);
    · fragmentos idénticos entre archivos se guardan una sola vez.        */
+// Leer un File puede COLGARSE sin resolver ni fallar: pasa con archivos de
+// iCloud sin descargar, con los que cambiaron después de elegirlos y con
+// algunos tipos que el sistema entrega sin respaldo válido. Un await colgado no
+// lanza nada, así que el try/catch no servía y la cola se quedaba clavada en
+// "cifrando". Con plazo, el archivo malo cae y los demás siguen.
+const LECTURA_MS = 30_000;
+const LECTURA_COLGADA = 'lectura-colgada';
+const conPlazo = (p, ms, motivo) => Promise.race([
+  p,
+  new Promise((_, rej) => setTimeout(() => rej(new Error(motivo)), ms)),
+]);
+
 async function ingestFileStreaming(file) {
   const fragHashes = [];
   const total = Math.max(1, Math.ceil(file.size / FRAG));
   for (let i = 0; i < total; i++) {
-    const buf = await file.slice(i * FRAG, (i + 1) * FRAG).arrayBuffer();
+    const buf = await conPlazo(file.slice(i * FRAG, (i + 1) * FRAG).arrayBuffer(), LECTURA_MS, LECTURA_COLGADA);
     const h = await bufHashHex(buf);
     fragHashes.push(h);
     if (!(await hasBlob(h))) await putBlob(h, await encryptBytes(buf));
@@ -818,7 +936,11 @@ async function ingestFile(file) {
   try {
     return await ingestFileStreaming(file);
   } catch (e) {
-    // sin espacio en el navegador, o el archivo no cabe en memoria
+    // sin espacio en el navegador, lectura colgada, o no cabe en memoria
+    if (e?.message === LECTURA_COLGADA) {
+      fail(`No se pudo leer "${file.name}": el sistema no entregó su contenido. Si está en iCloud/Drive, descárgalo al dispositivo primero; si lo editaste tras elegirlo, vuelve a seleccionarlo.`);
+      return null;
+    }
     const sinEspacio = /quota|storage|space/i.test(e?.name + e?.message);
     fail(sinEspacio
       ? `No hay espacio en este dispositivo para "${file.name}". Libera espacio o borra notas con archivos grandes.`
@@ -877,8 +999,22 @@ function paintTransfer() {
   $('xfer-name').textContent = pend.length > 1 ? `${f.name} (+${pend.length - 1})` : f.name;
   $('xfer-pct').textContent = `${pct}%`;
   $('xfer-fill').style.width = `${pct}%`;
+  $('xfer-info').textContent = transferInfo();
   box.hidden = false;
 }
+// de dónde viene y a qué ritmo: sin esto, "lento" y "colgado" se ven igual
+function transferInfo() {
+  const live = [...peers.values()].map((p) => p.dc).filter((dc) => dc && rateOf(dc) > 0);
+  // decir POR QUÉ no avanza: un emisor iOS dormido es la causa más común
+  if (!live.length) return peers.size ? 'esperando al otro dispositivo… (abre la app allí)' : 'sin dispositivos conectados';
+  const bps = live.reduce((a, dc) => a + rateOf(dc), 0);
+  const relay = live.filter(isRelay).length;
+  const ruta = relay === live.length ? 'relevo' : relay ? 'mixto' : 'directo';
+  return `${ruta} · ${prettySize(Math.round(bps))}/s`;
+}
+// la velocidad cambia cada ~1.5s: refrescar solo esa línea, sin repintar todo
+setInterval(() => { if (!$('xfer').hidden) $('xfer-info').textContent = transferInfo(); }, 1000);
+
 const isImage = (f) => (f.type || '').startsWith('image/');
 const prettySize = (b) => (b < 1024 ? `${b} B` : b < 1048576 ? `${(b / 1024).toFixed(0)} KB` : `${(b / 1048576).toFixed(1)} MB`);
 
@@ -1115,11 +1251,42 @@ const STALL_MS = 45_000;
 // quedaba "recibiendo…" para siempre.
 const MAX_PARALLEL = 12; // fragmentos en vuelo a la vez
 
+/* Velocidad medida por sinapsis. El reparto ciego (round-robin) hacía que un
+   peer lento — iPhone suspendido, o uno que va por relevo — retuviera la mitad
+   de los fragmentos hasta agotar STALL_MS. Ahora cada canal se gana su cuota. */
+const rates = new Map(); // dc → { bytes, since, bps }
+function noteBytes(dc, n) {
+  let r = rates.get(dc);
+  if (!r) rates.set(dc, (r = { bytes: 0, since: Date.now(), bps: 0 }));
+  r.bytes += n;
+  const dt = Date.now() - r.since;
+  if (dt < 1500) return; // ventana mínima: menos que eso es ruido
+  const now = r.bytes * 1000 / dt;
+  r.bps = r.bps ? r.bps * 0.6 + now * 0.4 : now; // media suavizada
+  r.bytes = 0;
+  r.since = Date.now();
+}
+const rateOf = (dc) => rates.get(dc)?.bps ?? 0;
+const isRelay = (dc) => dc?.relayed === true;
+// cuota por canal: 1 punto por cada 64 KB/s, tope 8. Un canal sin medir aún
+// arranca con 3 para que pueda demostrar lo que da.
+function slotsFor(dcs) {
+  const slots = [];
+  for (const dc of dcs) {
+    const bps = rateOf(dc);
+    const w = bps ? Math.max(1, Math.min(8, Math.round(bps / 65536))) : 3;
+    for (let i = 0; i < w; i++) slots.push(dc);
+  }
+  return slots;
+}
+
 // Pide los fragmentos que faltan REPARTIÉNDOLOS entre las sinapsis: con dos
 // dispositivos que ya tienen el archivo, se descarga al doble de velocidad.
+const lastAsk = new Map(); // hash → dc al que se le pidió (para no repreguntarle)
 function requestMissingBlobs() {
   const dcs = [...peers.values()].filter((p) => p.dc?.readyState === 'open').map((p) => p.dc);
   if (!dcs.length) return;
+  const slots = slotsFor(dcs);
   const now = Date.now();
   let inFlight = incoming.size;
   let turn = 0;
@@ -1135,8 +1302,11 @@ function requestMissingBlobs() {
       if (!h) continue;
       asking.set(h, now);
       inFlight++;
-      // un peer distinto por fragmento: con varias fuentes, descarga en paralelo
-      const dc = dcs[turn++ % dcs.length];
+      // cuota proporcional a la velocidad; y si es un reintento, se lo pedimos
+      // a OTRO peer (el anterior ya falló o va lento con ese fragmento)
+      let dc = slots[turn++ % slots.length];
+      if (dcs.length > 1 && lastAsk.get(h) === dc) dc = slots[turn++ % slots.length];
+      lastAsk.set(h, dc);
       try { dc.send(JSON.stringify({ t: 'GET_BLOB', hash: h })); } catch {}
     }
   }
@@ -1184,9 +1354,16 @@ function queueSend(dc, hash) {
 
 async function pump(dc) {
   const s = sender(dc);
-  if (s.busy || dc.readyState !== 'open') return;
+  if (dc.readyState !== 'open') return;
+  // pump espera a IndexedDB, y el aviso de "canal vacío" llega justo durante esa
+  // espera: si nos limitábamos a salir por `busy`, ese aviso se perdía y el
+  // emisor se quedaba parado con la cola llena hasta el reintento del receptor
+  // (12s o 45s). Por eso ahora se anota y se vuelve a dar una pasada.
+  if (s.busy) { s.again = true; return; }
   s.busy = true;
-  try {
+  do {
+   s.again = false;
+   try {
     while (dc.readyState === 'open') {
       if (!s.cur) {
         const hash = s.queue.shift();
@@ -1199,7 +1376,9 @@ async function pump(dc) {
       }
       const c = s.cur;
       // enviar mientras el canal tenga sitio; al llenarse, seguirá el evento
-      while (c.i < c.chunks && dc.bufferedAmount < BUF_HIGH) {
+      // por relevo el buffer alto es mucho menor: 4 MB en vuelo ahogan al worker
+      const hi = dc.relayed ? 512 * 1024 : BUF_HIGH;
+      while (c.i < c.chunks && dc.bufferedAmount < hi) {
         const part = c.ct.subarray(c.i * CHUNK, (c.i + 1) * CHUNK);
         const msg = new Uint8Array(HDR + part.length);
         msg.set(c.id, 0);
@@ -1211,15 +1390,53 @@ async function pump(dc) {
       if (c.i >= c.chunks) { s.cur = null; continue; } // fragmento enviado
       break; // buffer lleno: esperamos al evento del canal
     }
-  } catch {
-    s.cur = null;
-  } finally {
-    s.busy = false;
-  }
+   } catch {
+    // el fragmento a medias vuelve a la cola: antes se descartaba en silencio y
+    // el receptor esperaba 45s a que saltara el detector de atasco
+    if (s.cur) { s.queue.unshift(s.cur.hash); s.cur = null; }
+   }
+  } while (s.again && dc.readyState === 'open');
+  s.busy = false;
 }
 
+/* iOS congela la pestaña en segundo plano (y al apagarse la pantalla): el
+   emisor se queda a medias y la transferencia parece colgada. No se puede
+   evitar la congelación, pero sí reaccionar al volver y, mientras haya
+   transferencia viva, pedir que la pantalla no se apague. */
+addEventListener('visibilitychange', () => {
+  if (document.hidden) return;
+  for (const [dc, s] of senders) if ((s.cur || s.queue.length) && dc.readyState === 'open') pump(dc);
+  requestMissingBlobs(); // y reclamar lo que falte por recibir
+});
+
+let wakeLock = null;
+async function keepAwake(activo) {
+  try {
+    if (activo && !wakeLock && navigator.wakeLock) {
+      wakeLock = await navigator.wakeLock.request('screen');
+      wakeLock.addEventListener('release', () => { wakeLock = null; });
+    } else if (!activo && wakeLock) {
+      await wakeLock.release();
+      wakeLock = null;
+    }
+  } catch { wakeLock = null; } // sin permiso o sin soporte: seguimos igual
+}
+// hay trabajo si mando algo o si espero algo
+const transfiriendo = () => incoming.size > 0 || [...senders.values()].some((s) => s.cur || s.queue.length);
+setInterval(() => keepAwake(transfiriendo() && !document.hidden), 3_000);
+
+// Red de seguridad: si a un emisor le queda trabajo y nadie lo despierta (aviso
+// perdido, pestaña que estuvo en segundo plano), se reactiva solo.
+setInterval(() => {
+  for (const [dc, s] of senders) {
+    if (!s.busy && (s.cur || s.queue.length) && dc.readyState === 'open') pump(dc);
+  }
+}, 2_000);
+
 // trozo binario entrante: cabecera (hash + índice) y el resto son datos
-function onBinaryChunk(buf) {
+function onBinaryChunk(buf, dc) {
+  if (!isValidBinaryChunkLength(buf.byteLength)) return;
+  if (dc) noteBytes(dc, buf.byteLength); // así sabemos qué canal rinde
   const u = new Uint8Array(buf);
   if (u.length <= HDR) return;
   const hash = bytesHex(u.subarray(0, 32));
@@ -1230,8 +1447,18 @@ function onBinaryChunk(buf) {
 async function onBlobChunk(m) {
   const st = incoming.get(m.hash);
   if (!st) return;
+  if (!Number.isSafeInteger(m.i) || m.i < 0 || m.i >= st.total) return;
   if (st.chunks[m.i]) return; // trozo repetido (dos peers respondieron)
-  st.chunks[m.i] = m.bin ?? unb64(m.d);
+  let chunk;
+  if (m.bin instanceof Uint8Array) {
+    if (m.bin.byteLength === 0 || m.bin.byteLength > CHUNK) return;
+    chunk = m.bin;
+  } else {
+    if (!isValidBlobChunk(m, st.total)) return;
+    try { chunk = unb64(m.d); } catch { return; }
+    if (chunk.byteLength === 0 || chunk.byteLength > CHUNK) return;
+  }
+  st.chunks[m.i] = chunk;
   st.got++;
   st.ts = Date.now(); // sigue vivo: no lo barras
   if (st.got < st.total) return;
@@ -1247,6 +1474,7 @@ async function onBlobChunk(m) {
     if ((await bufHashHex(plain)) !== m.hash) return fail('Archivo descartado: no coincide con su huella. Puede estar corrupto o manipulado.');
     await putBlob(m.hash, rec);
     asking.delete(m.hash);
+    lastAsk.delete(m.hash);
     urlCache.delete(m.hash);
     requestMissingBlobs(); // pedir ya el siguiente: mantener la tubería llena
     paintTransfer();
@@ -1271,12 +1499,17 @@ const RTC = {
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun.cloudflare.com:3478' },
     { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
-    { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
+    { urls: 'turn:openrelay.metered.ca:80?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
   ],
 };
 const randBin = (n) => String.fromCharCode(...crypto.getRandomValues(new Uint8Array(n)).map((b) => b % 128));
 const selfId = randBin(20);
 let infoHash = '', pending = new Map(), sockets = [];
+// Rutas de señalización vivas, offer_id → conexión. Sirven para el trickle ICE:
+// los candidatos que aparecen DESPUÉS del SDP (relay/TURN, mDNS resuelto) viajan
+// por el tracker en vez de perderse. Sin esto, dos dispositivos en redes
+// distintas (o Mac ↔ VM) se quedaban en "emparejando…" para siempre.
+const sigs = new Map(); // offer_id → { pc, ws, remote, buf, rbuf, hasRemote, ts }
 
 let p2pStarted = false;
 async function startP2P() {
@@ -1311,6 +1544,9 @@ function stopP2P() {
   peers.clear();
   for (const ws of sockets) { try { ws.close(); } catch {} }
   sockets = [];
+  for (const [, s] of sigs) { try { s.pc.close(); } catch {} }
+  sigs.clear();
+  for (const [, ch] of [...relays]) { try { ch.close(); } catch {} }
   cleanPending(0);
   document.querySelectorAll('[data-chip]').forEach((e) => e.remove());
   refresh();
@@ -1325,6 +1561,135 @@ function cleanPending(maxAgeMs = 90_000) {
   for (const [id, p] of pending) {
     if (now - p.ts > maxAgeMs) { try { p.pc.close(); } catch {} pending.delete(id); }
   }
+  // rutas de señalización viejas: si la conexión cuajó ya no hacen falta (la
+  // sinapsis sigue viva); si no cuajó, cerrar el PeerConnection huérfano
+  for (const [id, s] of sigs) {
+    if (now - s.ts <= maxAgeMs) continue;
+    if (s.pc.connectionState !== 'connected') { try { s.pc.close(); } catch {} }
+    sigs.delete(id);
+  }
+}
+// trickle ICE: cada candidato local sale hacia el peer en cuanto existe. Si aún
+// no sabemos quién es (oferta recién creada, sin respuesta), se guarda y se
+// suelta al llegar la answer.
+function onLocalCandidate(id, cand) {
+  if (!cand) return;
+  const sig = sigs.get(id);
+  if (!sig) return;
+  if (!sig.remote) return void sig.buf.push(cand);
+  sendSig(sig, { candidate: cand.toJSON(), offer_id: id });
+}
+function sendSig(sig, extra) {
+  if (sig.ws?.readyState !== WebSocket.OPEN) return;
+  try {
+    sig.ws.send(JSON.stringify({ action: 'announce', info_hash: infoHash, peer_id: selfId, to_peer_id: sig.remote, ...extra }));
+  } catch {}
+}
+function flushLocalCandidates(id) {
+  const sig = sigs.get(id);
+  if (!sig) return;
+  for (const c of sig.buf) sendSig(sig, { candidate: c.toJSON(), offer_id: id });
+  sig.buf = [];
+}
+// candidatos remotos que llegaron antes que el SDP: no se pueden añadir todavía
+async function drainRemoteCandidates(sig) {
+  sig.hasRemote = true;
+  for (const c of sig.rbuf) { try { await sig.pc.addIceCandidate(c); } catch {} }
+  sig.rbuf = [];
+}
+/* ---------- relevo por el tracker (plan B cuando no hay ruta directa) ----------
+   WebRTC necesita un candidato `relay` (TURN) cuando ambos lados están detrás de
+   NAT dura y los host son mDNS (.local). Los TURN públicos gratuitos ya no
+   responden, así que el relevo lo hace NUESTRO worker por el mismo WebSocket de
+   señalización. Sigue sin ver nada: las notas y los archivos viajan cifrados E2E
+   igual que por el canal directo. Solo se usa si la conexión directa no cuaja. */
+const relays = new Map(); // peer_id remoto → canal (imita un RTCDataChannel)
+const RELAY_AFTER = 10_000;
+
+function relayChannel(ws, remote) {
+  const existing = relays.get(remote);
+  if (existing) return existing;
+  const listeners = new Map();
+  let lowArmed = false;
+  // Cola propia con contrapresión. Sin ella el emisor volcaba el archivo entero
+  // de golpe: `ws.bufferedAmount` se vacía al instante (el socket acepta todo),
+  // así que pump() nunca frenaba y el Durable Object se saturaba hasta morir —
+  // la transferencia se quedaba congelada a medias.
+  const q = [];
+  let qBytes = 0;
+  const WS_HIGH = 256 * 1024; // bytes en el socket antes de dejar de empujar
+  function drain() {
+    while (q.length && ws.readyState === WebSocket.OPEN && ws.bufferedAmount < WS_HIGH) {
+      const s = q.shift();
+      qBytes -= s.length;
+      ws.send(s);
+    }
+    if (lowArmed && ch.bufferedAmount <= ch.bufferedAmountLowThreshold) {
+      lowArmed = false;
+      ch.emit('bufferedamountlow', {}); // pide más trozos, como un DataChannel real
+    }
+  }
+  const ch = {
+    readyState: 'open',
+    relayed: true, // lo mira la barra de progreso para decir por dónde va
+    binaryType: 'arraybuffer',
+    bufferedAmountLowThreshold: 0,
+    onopen: null, onmessage: null, onclose: null,
+    // lo que aún no ha salido cuenta como buffer: así pump() se autolimita
+    get bufferedAmount() { return ws.bufferedAmount + qBytes; },
+    addEventListener(type, fn) { (listeners.get(type) ?? listeners.set(type, []).get(type)).push(fn); },
+    emit(type, ev) { listeners.get(type)?.forEach((f) => f(ev)); ch['on' + type]?.(ev); },
+    send(data) {
+      if (ch.readyState !== 'open' || ws.readyState !== WebSocket.OPEN) throw new Error('relevo cerrado');
+      const bin = data instanceof ArrayBuffer;
+      const s = JSON.stringify({
+        action: 'announce', info_hash: infoHash, peer_id: selfId, to_peer_id: remote,
+        relay: bin ? b64(data) : data, bin,
+      });
+      lowArmed = true;
+      q.push(s);
+      qBytes += s.length;
+      drain();
+    },
+    close() {
+      if (ch.readyState === 'closed') return;
+      ch.readyState = 'closed';
+      clearInterval(timer);
+      relays.delete(remote);
+      ch.emit('close', {});
+    },
+  };
+  // el WebSocket no avisa cuando se vacía: lo sondeamos para seguir empujando
+  const timer = setInterval(() => {
+    if (ws.readyState !== WebSocket.OPEN) return ch.close();
+    drain();
+  }, 100);
+  relays.set(remote, ch);
+  return ch;
+}
+// pc de mentira: wire() solo necesita poder cerrarlo y consultar su estado
+const relayPc = () => ({ connectionState: 'connected', close() {} });
+function openRelay(ws, remote, motivo) {
+  if (relays.has(remote)) return relays.get(remote);
+  const ch = relayChannel(ws, remote);
+  wire(relayPc(), ch);
+  ch.emit('open', {}); // ya está abierto: disparamos el HELLO nosotros
+  log(motivo);
+  return ch;
+}
+// si a los 10s no hay conexión directa con ese peer, tirar de relevo
+function relayFallback(sig) {
+  if (!sig.remote || relays.has(sig.remote)) return;
+  if (sig.pc.connectionState === 'connected') return;
+  openRelay(sig.ws, sig.remote, 'sin ruta directa — relevo cifrado por el tracker');
+}
+
+// diagnóstico visible: sin esto un fallo de ICE era indistinguible de "aún negociando"
+function iceLog(pc, tag) {
+  pc.oniceconnectionstatechange = () => {
+    console.log('[noteschain] ICE', tag, pc.iceConnectionState);
+    if (pc.iceConnectionState === 'failed') chip('pair-fail', 'sin ruta al dispositivo (ICE)', true);
+  };
 }
 async function announce(ws) {
   if (p2pDown || ws.readyState !== WebSocket.OPEN) return;
@@ -1340,10 +1705,13 @@ async function announce(ws) {
         const pc = new RTCPeerConnection(RTC);
         const dc = pc.createDataChannel('nc');
         wire(pc, dc);
-        await pc.setLocalDescription(await pc.createOffer());
-        await ice(pc);
         const id = randBin(20);
+        sigs.set(id, { pc, ws, remote: null, buf: [], rbuf: [], hasRemote: false, ts: Date.now() });
+        pc.onicecandidate = (ev) => onLocalCandidate(id, ev.candidate);
+        iceLog(pc, 'offer');
+        await pc.setLocalDescription(await pc.createOffer());
         pending.set(id, { pc, ts: Date.now() });
+        // el SDP sale ya, sin esperar a reunir candidatos: el resto va por trickle
         return { offer_id: id, offer: { type: 'offer', sdp: pc.localDescription.sdp } };
       } catch { return null; } // límite del navegador: esa oferta se pierde, seguimos
     }),
@@ -1357,25 +1725,54 @@ async function onTracker(ws, msg) {
   if (msg.answer && pending.has(msg.offer_id)) {
     chip('pair-answer', 'dispositivo emparejando…', true);
     const { pc } = pending.get(msg.offer_id); pending.delete(msg.offer_id);
-    try { await pc.setRemoteDescription(msg.answer); } catch {}
+    const sig = sigs.get(msg.offer_id);
+    try {
+      await pc.setRemoteDescription(msg.answer);
+      if (sig) {
+        sig.remote = msg.peer_id; // ya sabemos a quién mandarle nuestros candidatos
+        sig.ws = ws;
+        await drainRemoteCandidates(sig);
+        flushLocalCandidates(msg.offer_id);
+        setTimeout(() => relayFallback(sig), RELAY_AFTER);
+      }
+    } catch {}
   }
-  if (msg.offer && msg.peer_id && msg.peer_id !== selfId && !peers.has(msg.peer_id)) {
+  // datos relevados por el tracker: el otro lado no encontró ruta directa
+  if (msg.relay !== undefined && msg.peer_id) {
+    const ch = openRelay(ws, msg.peer_id, 'el otro dispositivo no tiene ruta directa — relevo cifrado');
+    ch.emit('message', { data: msg.bin ? unb64(msg.relay).buffer : msg.relay });
+    return;
+  }
+  // candidato ICE del otro lado (trickle)
+  if (msg.candidate && msg.offer_id) {
+    const sig = sigs.get(msg.offer_id);
+    if (sig) {
+      if (sig.hasRemote) { try { await sig.pc.addIceCandidate(msg.candidate); } catch {} }
+      else sig.rbuf.push(msg.candidate); // aún sin descripción remota: esperar
+    }
+  }
+  // dedup por offer_id: `peers` se indexa con el id del HELLO, no con el peer_id
+  // del tracker, así que la comprobación vieja nunca acertaba y respondíamos la
+  // misma oferta una y otra vez (PeerConnections duplicadas cada 8s).
+  if (msg.offer && msg.peer_id && msg.peer_id !== selfId && !sigs.has(msg.offer_id)) {
     try {
       chip('pair-' + bytesHex(enc(msg.peer_id).slice(0, 4)), 'dispositivo emparejando…', true);
       const pc = new RTCPeerConnection(RTC);
+      const sig = { pc, ws, remote: msg.peer_id, buf: [], rbuf: [], hasRemote: false, ts: Date.now() };
+      sigs.set(msg.offer_id, sig);
+      pc.onicecandidate = (ev) => onLocalCandidate(msg.offer_id, ev.candidate);
+      iceLog(pc, 'answer');
       pc.ondatachannel = (ev) => wire(pc, ev.channel, msg.peer_id);
       await pc.setRemoteDescription(msg.offer);
+      await drainRemoteCandidates(sig); // los que llegaron mientras aplicábamos el SDP
       await pc.setLocalDescription(await pc.createAnswer());
-      await ice(pc);
+      // answer primero, candidatos después: el otro lado los guarda hasta tener SDP
       ws.send(JSON.stringify({ action: 'announce', info_hash: infoHash, peer_id: selfId, to_peer_id: msg.peer_id, offer_id: msg.offer_id, answer: { type: 'answer', sdp: pc.localDescription.sdp } }));
+      flushLocalCandidates(msg.offer_id);
+      setTimeout(() => relayFallback(sig), RELAY_AFTER);
     } catch {}
   }
 }
-const ice = (pc) => new Promise((res) => {
-  if (pc.iceGatheringState === 'complete') return res();
-  const t = setTimeout(res, 3000); // margen para iOS sin frenar el announce
-  pc.onicegatheringstatechange = () => { if (pc.iceGatheringState === 'complete') { clearTimeout(t); res(); } };
-});
 // Los mensajes de cadena se procesan EN SERIE: evita la carrera donde dos
 // NEW_BLOCK simultáneos pasaban la validación a la vez y duplicaban bloques.
 let rxSeq = Promise.resolve();
@@ -1407,6 +1804,7 @@ function wire(pc, dc) {
       const p = peers.get(key);
       if (p.pub) onlinePubs.delete(p.pub);
       peers.delete(key);
+      rates.delete(dc); // su velocidad ya no cuenta para el reparto
       dropChip(key);
       refresh();
       if (!$('devs').hidden) paintDevices();
@@ -1417,8 +1815,9 @@ function wire(pc, dc) {
   pc.onconnectionstatechange = () => { if (['failed', 'disconnected', 'closed'].includes(pc.connectionState)) gone(); };
   dc.binaryType = 'arraybuffer';
   dc.onmessage = (ev) => {
-    if (ev.data instanceof ArrayBuffer) return onBinaryChunk(ev.data); // trozo de archivo
-    let m; try { m = JSON.parse(ev.data); } catch { return; }
+    if (ev.data instanceof ArrayBuffer) return onBinaryChunk(ev.data, dc); // trozo de archivo
+    const m = parseP2PMessage(ev.data);
+    if (!m) return;
     if (m.t === 'HELLO') {
       const id = m.id ?? randBin(20);
       if (key === id) { // latido periódico: solo comparar alturas y sanar huecos
@@ -1477,7 +1876,7 @@ function wire(pc, dc) {
     else if (m.t === 'GET_BLOB') { if (!tombstone) queueSend(dc, m.hash); }
     else if (m.t === 'BLOB_START') {
       // ignorar si ya lo tengo o ya está llegando de otro peer
-      if (!blobReady.has(m.hash) && !incoming.has(m.hash))
+      if (isValidBlobStart(m) && !blobReady.has(m.hash) && !incoming.has(m.hash))
         incoming.set(m.hash, { iv: m.iv, chunks: new Array(m.chunks), total: m.chunks, got: 0, ts: Date.now() });
     } else if (m.t === 'BLOB_CHUNK') enqueue(() => onBlobChunk(m));
     else if (m.t === 'BLOB_MISS') asking.delete(m.hash); // ese peer no lo tiene: reintentar con otro
@@ -1542,6 +1941,7 @@ async function refresh(dataChanged) {
   // el invitado solo puede leer, buscar, descargar y salir
   $('share').hidden = !isOwner(); // solo el owner reparte enlaces
   $('devices').hidden = false; // todos pueden ver quién está conectado
+  $('offline').hidden = false; // emparejar por LAN: útil para cualquier rol
   $('netoggle').hidden = !meta.device && !isOwner();
   $('forget').hidden = false;
   $('forget').textContent = isOwner() ? 'eliminar cerebro' : 'salir';
@@ -1694,9 +2094,32 @@ async function openView(id) {
   }
   $('v-edit').hidden = $('v-del').hidden = !canWrite();
   $('v-edit').onclick = () => openEdit(id);
-  $('v-del').onclick = async () => { $('modal').hidden = true; viewingId = null; await appendOp('NOTE_DELETE', { noteId: id }); };
+  // enviar ESTA nota por luz: sin red de ningún tipo, pantalla → cámara
+  $('v-beam').onclick = () => {
+    const n = notes.find((x) => x.id === id);
+    if (!n) return;
+    beamProgreso(0);
+    $('beam').hidden = false;
+    beamStart(n).catch((e) => beamEstado('no se pudo preparar el envío: ' + e.message));
+  };
+  $('v-del').onclick = async () => { closeModal(); await appendOp('NOTE_DELETE', { noteId: id }); };
 }
 let pendingFiles = []; // adjuntos de la nota en edición
+
+// Cerrar el modal dejaba `m-edit` con hidden=false para siempre: el resto del
+// código preguntaba por él para saber "¿está abierto el editor?" y a partir de
+// la primera edición siempre creía que sí. Consecuencia: soltar archivos ya no
+// abría nada, se cifraban contra un editor invisible y ahí se quedaban. Ahora
+// el cierre resetea de verdad y hay una sola forma de preguntar.
+function closeModal() {
+  $('modal').hidden = true;
+  $('m-edit').hidden = $('m-view').hidden = true;
+  viewingId = null;
+  pendingFiles = [];
+  pendingImage = null;
+  editingId = null;
+}
+const editorAbierto = () => !$('modal').hidden && !$('m-edit').hidden;
 function openEdit(id) {
   editingId = id;
   const n = id ? notes.find((x) => x.id === id) : null;
@@ -1735,15 +2158,22 @@ async function renderPendingImg() {
 
 async function attachFiles(fileList) {
   const files = [...fileList];
-  let i = 0;
+  let i = 0, ok = 0;
   for (const file of files) {
     i++;
     if (files.length > 1) log(`cifrando ${i}/${files.length}: ${file.name}`);
-    const desc = await ingestFile(file);
-    if (desc && !pendingFiles.some((f) => f.hash === desc.hash)) pendingFiles.push(desc);
+    const desc = await ingestFile(file); // uno malo ya no bloquea a los demás
+    if (desc) {
+      ok++;
+      if (!pendingFiles.some((f) => f.hash === desc.hash)) pendingFiles.push(desc);
+    }
     renderPendingImg(); // ir mostrando lo ya cifrado
   }
-  if (files.length > 1) toast(`${files.length} archivos listos y cifrados.`);
+  log(ok === files.length ? 'archivos cifrados' : `${ok} de ${files.length} archivos cifrados`);
+  // contar los que quedaron fuera: decir "listos" cuando faltan es mentir
+  if (files.length > 1 && ok) toast(ok === files.length
+    ? `${ok} archivos listos y cifrados.`
+    : `${ok} de ${files.length} archivos listos. El resto no se pudo leer.`, ok !== files.length);
 }
 
 $('e-attach').onclick = () => $('e-file').click();
@@ -1751,18 +2181,19 @@ $('e-media-btn').onclick = () => $('e-media').click();
 const onPick = (e) => { attachFiles(e.target.files); e.target.value = ''; };
 $('e-file').onchange = onPick;
 $('e-media').onchange = onPick;
-$('v-close').onclick = () => { $('modal').hidden = true; viewingId = null; };
-$('e-cancel').onclick = () => { $('modal').hidden = true; viewingId = null; };
+$('v-close').onclick = () => closeModal();
+$('e-cancel').onclick = () => closeModal();
 $('add').onclick = () => openEdit(null);
 $('e-save').onclick = async () => {
   const title = $('e-title').value.trim(), content = $('e-content').value;
   if (!title && !content && !pendingImage && !pendingFiles.length) return;
-  $('modal').hidden = true;
   const data = { title, content, image: pendingImage, files: pendingFiles };
-  const payload = { noteId: editingId ?? crypto.randomUUID(), enc: await Security.encrypt(data) };
-  await appendOp(editingId ? 'NOTE_EDIT' : 'NOTE_ADD', payload);
+  const noteId = editingId ?? crypto.randomUUID();
+  const esEdicion = Boolean(editingId);
+  closeModal(); // limpia estado: capturamos los datos justo antes
+  await appendOp(esEdicion ? 'NOTE_EDIT' : 'NOTE_ADD', { noteId, enc: await Security.encrypt(data) });
 };
-$('modal').onclick = (e) => { if (e.target === $('modal')) { $('modal').hidden = true; viewingId = null; } };
+$('modal').onclick = (e) => { if (e.target === $('modal')) closeModal(); };
 
 // pegar imágenes/archivos en el editor (el texto sigue pegando nativo)
 $('e-content').addEventListener('paste', async (e) => {
@@ -1779,9 +2210,11 @@ addEventListener('drop', async (e) => {
   if (!canWrite() || !e.dataTransfer?.files.length) return;
   e.preventDefault();
   document.body.classList.remove('dropping');
-  if ($('m-edit').hidden) { openEdit(null); } // sin editor abierto: nota nueva con los archivos
-  await attachFiles(e.dataTransfer.files);
-  if (!$('e-title').value) $('e-title').value = e.dataTransfer.files[0].name;
+  // copiar la lista YA: el dataTransfer se invalida en cuanto pasa un await
+  const dropped = [...e.dataTransfer.files];
+  if (!editorAbierto()) openEdit(null); // sin editor abierto: nota nueva con los archivos
+  await attachFiles(dropped);
+  if (!$('e-title').value) $('e-title').value = dropped[0].name;
 });
 
 // ⌘V / Ctrl+V FUERA del editor → crea la nota directamente (texto o imagen)
@@ -2105,6 +2538,80 @@ function paintDevices() {
 }
 $('devices').onclick = () => { paintDevices(); $('devs').hidden = false; };
 $('devs-close').onclick = () => ($('devs').hidden = true);
+
+/* ---- emparejar sin internet: generar / pegar códigos ---- */
+const pairState = (t) => ($('pair-state').textContent = t);
+async function showPairCode(code, msg) {
+  $('pair-out').value = code;
+  $('pair-out').hidden = false;
+  $('pair-out-actions').hidden = false;
+  $('pair-share').hidden = !navigator.share;
+  pairState(msg);
+  try { await paintQr(pairUrl(code)); }
+  catch { pairState(msg + ' (sin QR: usa copiar y pegar)'); }
+}
+function openPair(prefill) {
+  $('pair-out').hidden = $('pair-out-actions').hidden = $('pair-qr').hidden = true;
+  $('pair-out').value = '';
+  $('pair-in').value = prefill ?? '';
+  $('pair-scan').hidden = !canScan();
+  pairState(prefill ? 'Código recibido — pulsa “usar código”.' : '');
+  $('pair').hidden = false;
+}
+$('offline').onclick = () => openPair();
+$('beam-close').onclick = () => beamClose();
+$('beam-recv').onclick = async () => {
+  clearInterval(beamTimer); beamTimer = null; // recibir y emitir a la vez no tiene sentido
+  beamProgreso(0);
+  try { await beamReceive(); }
+  catch (e) { beamEstado('no se pudo abrir la cámara: ' + e.message); }
+};
+// atajo para recibir: se llega desde el diálogo de emparejar sin internet
+$('pair-beam').onclick = () => {
+  $('pair').hidden = true;
+  beamProgreso(0);
+  $('beam').hidden = false;
+  beamEstado('pulsa “recibir” y apunta a la pantalla que emite.');
+};
+$('pair-close').onclick = () => { scanStop?.(); $('pair').hidden = true; };
+$('pair-scan').onclick = async () => {
+  if (scanStop) return scanStop();
+  pairState('apunta la cámara al QR del otro dispositivo…');
+  try {
+    await startScan((code) => { $('pair-in').value = code; $('pair-use').click(); });
+  } catch (e) { pairState('no se pudo abrir la cámara: ' + e.message); }
+};
+$('pair-make').onclick = async () => {
+  pairState('generando invitación…');
+  try {
+    const code = await makeOfflineOffer();
+    await showPairCode(code, 'Escanea este QR con el otro dispositivo (o cópiale el texto). Luego trae su respuesta aquí abajo.' + noLanAviso());
+  } catch (e) { pairState('no se pudo generar: ' + e.message); }
+};
+$('pair-copy').onclick = async () => {
+  try { await navigator.clipboard.writeText($('pair-out').value); toast('Código copiado.'); }
+  catch { $('pair-out').select(); toast('Selecciónalo y copia a mano.', true); }
+};
+$('pair-share').onclick = async () => {
+  try { await navigator.share({ text: $('pair-out').value }); } catch {}
+};
+$('pair-use').onclick = async () => {
+  const code = $('pair-in').value.trim();
+  if (!looksLikePairCode(code)) return pairState('Eso no es un código de emparejamiento (empieza por ' + PAIR_PREFIX + ').');
+  pairState('procesando…');
+  try {
+    const { t } = await unpackCode(code);
+    if (t === 'o') {
+      // me pasaron una invitación: devuelvo respuesta
+      const resp = await answerOfflineOffer(code);
+      await showPairCode(resp, 'Ahora enséñale ESTE QR (o el texto) al otro dispositivo.' + noLanAviso());
+    } else {
+      await acceptOfflineAnswer(code);
+      pairState('respuesta aceptada — conectando por la red local…');
+    }
+    $('pair-in').value = '';
+  } catch (e) { pairState('código inválido: ' + e.message); }
+};
 $('devs').onclick = (e) => { if (e.target === $('devs')) $('devs').hidden = true; };
 
 // desconectar/conectar: kill switch de red — corta todas las sinapsis y
@@ -2200,6 +2707,641 @@ document.addEventListener('visibilitychange', () => {
   requestMissingBlobs();
 });
 
+/* ---------- app offline (service worker) ---------- */
+// Cachea el código para que la app abra sin internet. Las notas ya vivían en
+// IndexedDB; lo que faltaba era poder cargar la propia página.
+if ('serviceWorker' in navigator) {
+  addEventListener('load', async () => {
+    try { await navigator.serviceWorker.register('./sw.js'); } catch { return; }
+    // Precalentar en segundo plano lo que hace falta para emparejar sin red:
+    // el service worker guarda todo lo que se pide, así que basta con pedirlo
+    // una vez estando con internet.
+    setTimeout(() => {
+      for (const f of ['qrcode.js', 'jsQR.js']) fetch(vendor(f)).catch(() => {});
+    }, 4000);
+  });
+}
+
+/* ---------- envío por luz: QR animado con códigos fountain ----------
+   Último recurso cuando NO hay ninguna red común (ni WiFi, ni datos): el
+   archivo sale por la pantalla como una secuencia de QR y entra por la cámara
+   del otro. El canal es de ida y sin retorno — el receptor no puede pedir "
+   repíteme el cuadro 47" — así que se usan códigos fountain (LT): el emisor
+   genera cuadros indefinidamente, cada uno el XOR de un subconjunto aleatorio
+   de bloques elegido por una semilla. El receptor puede llegar tarde, perder
+   cuadros o moverse; con recibir algo más de K cuadros útiles, reconstruye. */
+
+// PRNG con semilla (xorshift32): emisor y receptor deben elegir EXACTAMENTE el
+// mismo subconjunto de bloques a partir del número que viaja en la cabecera.
+function rng32(seed) {
+  let x = seed >>> 0 || 0x9e3779b9;
+  return () => {
+    x ^= x << 13; x >>>= 0;
+    x ^= x >>> 17;
+    x ^= x << 5; x >>>= 0;
+    return x / 0x100000000;
+  };
+}
+
+// Distribución robusta de solitón: casi todos los cuadros combinan pocos
+// bloques (baratos de "pelar"), y de vez en cuando uno de grado alto que
+// destraba el final. Sin esto, la cola de la transferencia no converge.
+function gradoLT(rand, K) {
+  const r = rand();
+  if (r < 0.06) return 1; // semillas: sin ellas el pelado no arranca nunca
+  let acc = 0;
+  for (let d = 2; d <= K; d++) {
+    acc += 1 / (d * (d - 1));
+    if (r < 0.06 + acc * 0.94) return d;
+  }
+  return Math.min(K, 2);
+}
+// qué bloques entran en el cuadro de esa semilla (mismo cálculo en ambos lados)
+function bloquesDe(seed, K) {
+  const rand = rng32(seed);
+  const d = Math.min(K, gradoLT(rand, K));
+  const set = new Set();
+  while (set.size < d) set.add(Math.floor(rand() * K) % K);
+  return [...set];
+}
+
+const BEAM_MAGIC = 0x4e43; // 'NC'
+const BEAM_HDR = 16;
+
+// un cuadro = cabecera + XOR de sus bloques
+function beamFrame(blocks, K, len, sid, seed, B) {
+  const out = new Uint8Array(BEAM_HDR + B);
+  const dv = new DataView(out.buffer);
+  dv.setUint16(0, BEAM_MAGIC);
+  dv.setUint8(2, 1);            // versión
+  dv.setUint8(3, 0);
+  dv.setUint16(4, sid);         // id de envío: descarta cuadros de otra sesión
+  dv.setUint16(6, K);
+  dv.setUint32(8, len);         // longitud real (el último bloque va con relleno)
+  dv.setUint32(12, seed);
+  const mix = out.subarray(BEAM_HDR);
+  for (const i of bloquesDe(seed, K)) {
+    const b = blocks[i];
+    for (let j = 0; j < B; j++) mix[j] ^= b[j];
+  }
+  return out;
+}
+
+function beamEncoder(bytes, B = 700) {
+  const K = Math.max(1, Math.ceil(bytes.length / B));
+  const blocks = Array.from({ length: K }, (_, i) => {
+    const b = new Uint8Array(B);
+    b.set(bytes.subarray(i * B, Math.min(bytes.length, (i + 1) * B)));
+    return b;
+  });
+  const sid = Math.floor(Math.random() * 65536);
+  let n = 0;
+  return {
+    K, sid, total: bytes.length,
+    // los primeros K cuadros van "en claro" (grado 1, en orden): con buena luz
+    // y sin pérdidas basta una pasada; luego ya entra el fountain
+    next() {
+      const seed = n < K ? 0x80000000 + n : (Math.random() * 0xffffffff) >>> 0;
+      const f = n < K
+        ? (() => {
+            const out = new Uint8Array(BEAM_HDR + B);
+            const dv = new DataView(out.buffer);
+            dv.setUint16(0, BEAM_MAGIC); dv.setUint8(2, 1);
+            dv.setUint16(4, sid); dv.setUint16(6, K);
+            dv.setUint32(8, bytes.length); dv.setUint32(12, seed);
+            out.set(blocks[n], BEAM_HDR);
+            return out;
+          })()
+        : beamFrame(blocks, K, bytes.length, sid, seed, B);
+      n++;
+      return f;
+    },
+  };
+}
+
+// Decodificador por pelado: un cuadro de grado 1 revela su bloque; ese bloque se
+// resta (XOR) de los cuadros que lo contenían, que bajan de grado, y así en
+// cascada hasta reconstruirlo todo.
+function beamDecoder() {
+  let K = 0, len = 0, sid = null, B = 0;
+  const known = new Map();   // índice de bloque → bytes
+  const pend = [];           // cuadros aún sin resolver: { ids:Set, data }
+  return {
+    get progreso() { return K ? known.size / K : 0; },
+    get listo() { return K > 0 && known.size === K; },
+    get bloques() { return K; },
+    push(u8) {
+      if (u8.length <= BEAM_HDR) return false;
+      const dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength);
+      if (dv.getUint16(0) !== BEAM_MAGIC || dv.getUint8(2) !== 1) return false;
+      const s = dv.getUint16(4);
+      if (sid === null) { sid = s; K = dv.getUint16(6); len = dv.getUint32(8); B = u8.length - BEAM_HDR; }
+      else if (s !== sid) return false; // otro envío: ignorar
+      const seed = dv.getUint32(12);
+      const data = u8.slice(BEAM_HDR);
+      const ids = seed >= 0x80000000 ? [seed - 0x80000000] : bloquesDe(seed, K);
+      let entry = { ids: new Set(ids.filter((i) => i < K)), data };
+      // quitar de una vez lo que ya conocemos
+      for (const i of [...entry.ids]) {
+        if (!known.has(i)) continue;
+        const b = known.get(i);
+        for (let j = 0; j < B; j++) entry.data[j] ^= b[j];
+        entry.ids.delete(i);
+      }
+      if (entry.ids.size === 0) return false; // nada nuevo
+      pend.push(entry);
+      // cascada de pelado
+      let avanzo = true;
+      while (avanzo) {
+        avanzo = false;
+        for (let k = pend.length - 1; k >= 0; k--) {
+          const e = pend[k];
+          if (e.ids.size !== 1) continue;
+          const i = [...e.ids][0];
+          pend.splice(k, 1);
+          if (known.has(i)) continue;
+          known.set(i, e.data);
+          avanzo = true;
+          for (const o of pend) {
+            if (!o.ids.has(i)) continue;
+            for (let j = 0; j < B; j++) o.data[j] ^= e.data[j];
+            o.ids.delete(i);
+          }
+        }
+      }
+      return true;
+    },
+    salida() {
+      if (!this.listo) return null;
+      const out = new Uint8Array(K * B);
+      for (let i = 0; i < K; i++) out.set(known.get(i), i * B);
+      return out.subarray(0, len);
+    },
+  };
+}
+
+/* ---- empaquetado de una nota para mandarla por luz ----
+   [4B tamaño del JSON][JSON][bytes de los archivos, uno tras otro]
+   Los archivos van CRUDOS, no en base64: un tercio menos de cuadros. */
+const BEAM_MAX = 2 * 1024 * 1024;
+
+async function beamPack(note) {
+  const partes = [], meta = [];
+  for (const f of note.files ?? []) {
+    const url = await blobUrl(f);
+    if (!url) continue; // aún no lo tenemos entero: no se puede reenviar
+    const buf = new Uint8Array(await (await fetch(url)).arrayBuffer());
+    meta.push({ name: f.name, type: f.type, size: buf.length });
+    partes.push(buf);
+  }
+  const json = new TextEncoder().encode(JSON.stringify({
+    v: 1, title: note.title ?? '', content: note.content ?? '', files: meta,
+  }));
+  const total = 4 + json.length + partes.reduce((a, p) => a + p.length, 0);
+  const out = new Uint8Array(total);
+  new DataView(out.buffer).setUint32(0, json.length);
+  out.set(json, 4);
+  let off = 4 + json.length;
+  for (const p of partes) { out.set(p, off); off += p.length; }
+  return out;
+}
+
+function beamUnpack(bytes) {
+  const jsonLen = new DataView(bytes.buffer, bytes.byteOffset).getUint32(0);
+  const head = JSON.parse(new TextDecoder().decode(bytes.subarray(4, 4 + jsonLen)));
+  let off = 4 + jsonLen;
+  const files = (head.files ?? []).map((m) => {
+    const b = bytes.subarray(off, off + m.size);
+    off += m.size;
+    return new File([b], m.name || 'archivo', { type: m.type || 'application/octet-stream' });
+  });
+  return { title: head.title, content: head.content, files };
+}
+
+/* ---- emisor: pintar los cuadros en un canvas ----
+   Canvas y no SVG: hay que repintar ~12 veces por segundo y montar SVG en cada
+   cuadro tira la tasa al suelo. */
+let beamTimer = null;
+async function beamStart(note) {
+  const bytes = await beamPack(note);
+  if (bytes.length > BEAM_MAX) {
+    return fail(`Son ${prettySize(bytes.length)} y por luz el tope es ${prettySize(BEAM_MAX)}. Manda la nota sin los archivos grandes.`);
+  }
+  const make = await loadQr();
+  // el generador codifica en UTF-8 por defecto y eso inflaría los bytes crudos:
+  // aquí cada byte es un byte
+  make.stringToBytes = (s) => Array.from(s, (c) => c.charCodeAt(0) & 0xff);
+  const enc = beamEncoder(bytes, 800);
+  const cv = $('beam-canvas');
+  const cx = cv.getContext('2d');
+  cv.hidden = false;
+  $('beam-video').hidden = true;
+  const segundos = Math.max(2, Math.round((enc.K * 816) / 12000)); // ~12 KB/s reales
+  beamEstado(`enviando ${prettySize(bytes.length)} en ${enc.K} bloques — apunta la cámara del otro dispositivo. Mínimo ~${segundos}s; no muevas nada.`);
+  // Pintar módulo a módulo con fillRect costaba ~9.400 llamadas por cuadro:
+  // 275 ms, o sea 2 cuadros por segundo. Se pinta el QR en un canvas de n×n
+  // píxeles con ImageData y se escala sin suavizado: 19 ms, 20 veces más.
+  const chico = document.createElement('canvas');
+  const sc = chico.getContext('2d');
+  let cuadro = 0;
+  clearInterval(beamTimer);
+  beamTimer = setInterval(() => {
+    const f = enc.next();
+    const qr = make(0, 'L');
+    qr.addData(String.fromCharCode(...f), 'Byte');
+    qr.make();
+    const n = qr.getModuleCount();
+    if (chico.width !== n) { chico.width = chico.height = n; }
+    const img = sc.createImageData(n, n);
+    for (let r = 0; r < n; r++) {
+      for (let c = 0; c < n; c++) {
+        const o = (r * n + c) * 4;
+        const v = qr.isDark(r, c) ? 0 : 255;
+        img.data[o] = img.data[o + 1] = img.data[o + 2] = v;
+        img.data[o + 3] = 255;
+      }
+    }
+    sc.putImageData(img, 0, 0);
+    const cell = Math.max(2, Math.floor(Math.min(innerWidth * 0.82, 520) / (n + 4)));
+    const size = cell * (n + 4);
+    if (cv.width !== size) { cv.width = cv.height = size; }
+    cx.imageSmoothingEnabled = false; // borroso = ilegible para la cámara
+    cx.fillStyle = '#fff'; cx.fillRect(0, 0, size, size);
+    cx.drawImage(chico, 2 * cell, 2 * cell, n * cell, n * cell);
+    cuadro++;
+    beamProgreso(Math.min(1, cuadro / enc.K));
+    if (cuadro % 10 === 0) beamEstado(`cuadro ${cuadro} · ${cuadro < enc.K ? 'primera pasada' : 'reparando huecos (fountain)'} — sigue apuntando`);
+  }, 66); // ~15 cuadros por segundo: la cámara captura a 30, y los cuadros
+     // perdidos los tapa el fountain
+}
+
+/* ---- receptor: cámara + decodificador ---- */
+let beamRecvStop = null;
+async function beamReceive() {
+  const jsQR = await loadJsQr();
+  const video = $('beam-video');
+  const stream = await navigator.mediaDevices.getUserMedia({
+    video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
+  });
+  video.srcObject = stream;
+  video.hidden = false;
+  $('beam-canvas').hidden = true;
+  video.setAttribute('playsinline', '');
+  await video.play();
+  const dec = beamDecoder();
+  const cv = document.createElement('canvas');
+  const cx = cv.getContext('2d', { willReadFrequently: true });
+  let vivo = true, leidos = 0;
+  beamRecvStop = () => {
+    vivo = false;
+    stream.getTracks().forEach((t) => t.stop());
+    video.hidden = true; video.srcObject = null;
+    beamRecvStop = null;
+  };
+  beamEstado('apunta a la pantalla del otro dispositivo…');
+  (async function loop() {
+    while (vivo) {
+      const w = video.videoWidth, h = video.videoHeight;
+      if (w && h) {
+        cv.width = w; cv.height = h;
+        cx.drawImage(video, 0, 0, w, h);
+        const res = jsQR(cx.getImageData(0, 0, w, h).data, w, h, { inversionAttempts: 'dontInvert' });
+        // binaryData: los bytes tal cual, sin pasar por texto
+        if (res?.binaryData?.length) {
+          if (dec.push(new Uint8Array(res.binaryData))) {
+            leidos++;
+            beamProgreso(dec.progreso);
+            beamEstado(`recibiendo… ${Math.round(dec.progreso * 100)}% (${leidos} cuadros útiles de ${dec.bloques} bloques)`);
+          }
+          if (dec.listo) { beamRecvStop?.(); return beamFinish(dec.salida()); }
+        }
+      }
+      await new Promise((r) => setTimeout(r, 30));
+    }
+  })();
+}
+
+async function beamFinish(bytes) {
+  beamProgreso(1);
+  beamEstado('reconstruido — guardando…');
+  try {
+    const { title, content, files } = beamUnpack(bytes);
+    const descs = [];
+    for (const f of files) {
+      const d = await ingestFile(f);
+      if (d) descs.push(d);
+    }
+    await createNote({ title, content, image: null, files: descs });
+    beamEstado('listo: la nota entró en este cerebro ✓');
+    toast('Nota recibida por luz.');
+  } catch (e) {
+    beamEstado('no se pudo reconstruir: ' + e.message);
+  }
+}
+
+const beamEstado = (t) => ($('beam-state').textContent = t);
+const beamProgreso = (p) => ($('beam-fill').style.width = `${Math.round(p * 100)}%`);
+function beamClose() {
+  clearInterval(beamTimer); beamTimer = null;
+  beamRecvStop?.();
+  $('beam').hidden = true;
+  $('beam-canvas').hidden = $('beam-video').hidden = true;
+}
+
+/* ---------- emparejar sin internet ----------
+   Todo lo que WebRTC necesita para conectar cabe en un texto: el SDP. Con los
+   dos dispositivos en la misma WiFi, los candidatos `host` bastan — ni tracker,
+   ni STUN, ni salida a internet. El código viaja como tú quieras: portapapeles
+   universal, AirDrop, hoja de compartir. Se pega y listo.
+
+   Flujo: A genera INVITACIÓN → B la pega y devuelve RESPUESTA → A la pega. */
+const PAIR_PREFIX = 'NCP1:';
+
+/* Un SDP de datachannel es casi todo plantilla fija. Lo único irrepetible:
+   ice-ufrag, ice-pwd, la huella DTLS y los candidatos. Guardando solo eso, el
+   código baja de ~900 caracteres a ~140 — apto para un QR pequeño y para pasarlo
+   a mano si no queda otra. La plantilla se reconstruye en el otro lado. */
+function compactSdp(sdp) {
+  const one = (re) => sdp.match(re)?.[1];
+  const u = one(/a=ice-ufrag:(\S+)/);
+  const p = one(/a=ice-pwd:(\S+)/);
+  const f = one(/a=fingerprint:sha-256 (\S+)/)?.replace(/:/g, '').toLowerCase();
+  const s = one(/a=setup:(\S+)/);
+  if (!u || !p || !f || !s) return null; // formato inesperado: mejor mandar el SDP entero
+  const cands = [];
+  for (const m of sdp.matchAll(/a=candidate:(\S+) (\d+) (udp|tcp) (\d+) (\S+) (\d+) typ (\w+)/gi)) {
+    if (m[7] !== 'host' && m[7] !== 'srflx') continue; // lo demás no sirve en LAN
+    cands.push([m[5], +m[6], m[3].toLowerCase() === 'tcp' ? 1 : 0, m[7] === 'srflx' ? 1 : 0]);
+  }
+  // ojo: 'actpass' y 'active' comparten inicial — un answer con setup:actpass
+  // es rechazado, así que se codifican distinto
+  const s1 = s === 'actpass' ? 'A' : s === 'passive' ? 'p' : 'a';
+  return { u, p, f, s: s1, c: cands };
+}
+function expandSdp(o, type) {
+  const fp = o.f.match(/../g).join(':').toUpperCase();
+  const lines = [
+    'v=0',
+    'o=- 1 1 IN IP4 127.0.0.1',
+    's=-',
+    't=0 0',
+    'a=group:BUNDLE 0',
+    'a=msid-semantic: WMS',
+    'm=application 9 UDP/DTLS/SCTP webrtc-datachannel',
+    'c=IN IP4 0.0.0.0',
+    'a=mid:0',
+    'a=sctp-port:5000',
+    'a=max-message-size:262144',
+    `a=ice-ufrag:${o.u}`,
+    `a=ice-pwd:${o.p}`,
+    'a=ice-options:trickle',
+    `a=fingerprint:sha-256 ${fp}`,
+    `a=setup:${o.s === 'A' ? 'actpass' : o.s === 'p' ? 'passive' : 'active'}`,
+  ];
+  o.c.forEach(([ip, port, tcp, srflx], i) => {
+    const proto = tcp ? 'tcp' : 'udp';
+    const typ = srflx ? 'srflx' : 'host';
+    const v6 = ip.includes(':') ? 'IP6' : 'IP4';
+    lines.push(`a=candidate:${i + 1} 1 ${proto} ${2130706431 - i} ${ip} ${port} typ ${typ}` + (tcp ? ' tcptype passive' : ''));
+    void v6;
+  });
+  lines.push('a=end-of-candidates');
+  void type;
+  return lines.join('\r\n') + '\r\n';
+}
+
+// deflate + base64url: un SDP de ~2 KB baja a ~600 bytes, apto para pegar y
+// (en la etapa 2) para caber en un QR
+async function packCode(obj) {
+  const raw = new TextEncoder().encode(JSON.stringify(obj));
+  let bytes = raw;
+  if (typeof CompressionStream === 'function') {
+    const cs = new CompressionStream('deflate-raw');
+    const w = cs.writable.getWriter(); w.write(raw); w.close();
+    bytes = new Uint8Array(await new Response(cs.readable).arrayBuffer());
+  }
+  const b = btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  return PAIR_PREFIX + (bytes === raw ? 'r' : 'z') + b;
+}
+async function unpackCode(code) {
+  const body = code.trim().replace(/\s+/g, '').slice(PAIR_PREFIX.length);
+  const mode = body[0];
+  const b64s = body.slice(1).replace(/-/g, '+').replace(/_/g, '/');
+  let bytes = Uint8Array.from(atob(b64s), (c) => c.charCodeAt(0));
+  if (mode === 'z') {
+    const ds = new DecompressionStream('deflate-raw');
+    const w = ds.writable.getWriter(); w.write(bytes); w.close();
+    bytes = new Uint8Array(await new Response(ds.readable).arrayBuffer());
+  }
+  return JSON.parse(new TextDecoder().decode(bytes));
+}
+const looksLikePairCode = (s) => s.trim().startsWith(PAIR_PREFIX);
+
+// Sin internet no hay STUN que responda: esperar a `complete` colgaría. Se
+// recogen los candidatos locales, que es justo lo que sirve en la misma WiFi.
+const gatherLocal = (pc) => new Promise((res) => {
+  if (pc.iceGatheringState === 'complete') return res();
+  const t = setTimeout(res, 2500);
+  pc.onicegatheringstatechange = () => { if (pc.iceGatheringState === 'complete') { clearTimeout(t); res(); } };
+});
+
+/* ---- QR: mostrar y escanear ----
+   El código se pinta como URL de la propia app (…/#p=CÓDIGO). Así la cámara
+   nativa del iPhone/Android lo reconoce y abre la app con el código ya puesto,
+   sin instalar ningún lector. Y como el service worker cachea la app, ese
+   enlace también abre sin internet. */
+const pairUrl = (code) => new URL(`./#p=${code}`, location.href).href;
+
+// Los vendor van con sello de versión: si el navegador cacheó alguna vez una
+// respuesta mala para esa ruta (un 404 servido antes de desplegarla), la caché
+// de una semana la dejaría clavada. Cambiar el sello la esquiva.
+const VENDOR_V = '2';
+const vendor = (f) => new URL(`./vendor/${f}?v=${VENDOR_V}`, import.meta.url).href;
+
+let qrLib = null;
+function loadQr() {
+  // el encoder es un script clásico (define `qrcode` global): se carga a demanda
+  if (qrLib) return qrLib;
+  return (qrLib = new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = vendor('qrcode.js');
+    s.onload = () => res(window.qrcode);
+    s.onerror = () => { qrLib = null; rej(new Error('no se pudo cargar el generador de QR')); };
+    document.head.append(s);
+  }));
+}
+async function paintQr(text) {
+  const box = $('pair-qr');
+  const make = await loadQr();
+  const qr = make(0, 'L'); // versión automática, corrección baja (cabe más texto)
+  qr.addData(text);
+  qr.make();
+  box.innerHTML = qr.createSvgTag({ cellSize: 4, margin: 2, scalable: true });
+  box.hidden = false;
+}
+
+// Escanear funciona en todas partes: donde el navegador trae `BarcodeDetector`
+// (Chrome/Brave/Edge) se usa el nativo; en iOS —Safari, Opera y Chrome son
+// todos WebKit y NO lo tienen— cae a un decodificador en JS empaquetado con la
+// app. Solo hace falta cámara.
+const canScan = () => !!navigator.mediaDevices?.getUserMedia;
+
+let jsqrLib = null;
+function loadJsQr() {
+  if (jsqrLib) return jsqrLib;
+  return (jsqrLib = new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = vendor('jsQR.js');
+    s.onload = () => res(window.jsQR);
+    s.onerror = () => { jsqrLib = null; rej(new Error('no se pudo cargar el lector de QR')); };
+    document.head.append(s);
+  }));
+}
+
+let scanStop = null;
+async function startScan(onCode) {
+  const video = $('pair-video');
+  const stream = await navigator.mediaDevices.getUserMedia({
+    video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 } },
+  });
+  video.srcObject = stream;
+  video.hidden = false;
+  video.setAttribute('playsinline', ''); // iOS: sin esto abre el reproductor a pantalla completa
+  await video.play();
+
+  const native = 'BarcodeDetector' in window ? new BarcodeDetector({ formats: ['qr_code'] }) : null;
+  const decode = native
+    ? async () => (await native.detect(video))[0]?.rawValue ?? null
+    : await (async () => {
+        const jsQR = await loadJsQr();
+        const cv = document.createElement('canvas');
+        const cx = cv.getContext('2d', { willReadFrequently: true });
+        return () => {
+          const w = video.videoWidth, h = video.videoHeight;
+          if (!w || !h) return null;
+          cv.width = w; cv.height = h;
+          cx.drawImage(video, 0, 0, w, h);
+          return jsQR(cx.getImageData(0, 0, w, h).data, w, h, { inversionAttempts: 'dontInvert' })?.data ?? null;
+        };
+      })();
+
+  let alive = true;
+  scanStop = () => {
+    alive = false;
+    stream.getTracks().forEach((t) => t.stop());
+    video.hidden = true;
+    video.srcObject = null;
+    scanStop = null;
+  };
+  (async function loop() {
+    while (alive) {
+      try {
+        const raw = await decode();
+        const code = raw && extractPairCode(raw);
+        if (code) { scanStop?.(); onCode(code); return; }
+      } catch {}
+      await new Promise((r) => setTimeout(r, 200));
+    }
+  })();
+}
+// el QR puede traer la URL entera o el código pelado: nos quedamos con el código
+function extractPairCode(text) {
+  const i = text.indexOf(PAIR_PREFIX);
+  return i < 0 ? null : text.slice(i).trim();
+}
+
+let offlinePc = null; // conexión a medias esperando la respuesta
+
+// Sin candidatos no hay por dónde conectar: pasa con el modo avión (apaga el
+// WiFi) o con la red desactivada. Mejor decirlo al generar el código que dejar
+// al usuario esperando un "conectando…" que nunca termina.
+const NO_LAN = 'Este dispositivo no ofrece ninguna red local: el emparejado no podrá completarse. El modo avión apaga el WiFi — enciéndelo a mano (sigue sin internet) y vuelve a generar el código.';
+const noLanAviso = () => (lastCands === 0 ? ' ⚠ ' + NO_LAN : '');
+
+// vigila si la conexión cuaja y lo dice; antes se quedaba en "conectando…" a secas
+function watchOfflinePair(pc) {
+  const t0 = Date.now();
+  const timer = setInterval(() => {
+    const st = pc.connectionState;
+    if (st === 'connected') { clearInterval(timer); pairState('conectado por la red local ✓'); return; }
+    if (st === 'failed' || Date.now() - t0 > 20_000) {
+      clearInterval(timer);
+      pairState('no se encontró ruta entre los dos dispositivos. Comprueba que ambos estén en la MISMA WiFi (el modo avión la apaga) y que la red no aísle a los clientes entre sí.');
+    }
+  }, 1000);
+}
+
+async function makeOfflineOffer() {
+  offlinePc?.close();
+  const pc = offlinePc = new RTCPeerConnection(RTC);
+  const dc = pc.createDataChannel('nc');
+  wire(pc, dc);
+  iceLog(pc, 'offline-offer');
+  await pc.setLocalDescription(await pc.createOffer());
+  await gatherLocal(pc);
+  return packSdp('o', pc.localDescription.sdp);
+}
+
+// compacto si se puede, SDP entero si el formato sorprende
+let lastCands = 0; // candidatos del último código generado (0 = sin red local)
+const packSdp = (t, sdp) => {
+  const k = compactSdp(sdp);
+  lastCands = k ? k.c.length : (sdp.match(/a=candidate:/g) ?? []).length;
+  return k ? packCode({ t, k }) : packCode({ t, sdp });
+};
+const sdpOf = (o) => (o.k ? expandSdp(o.k, o.t) : o.sdp);
+
+// B: recibe la invitación y devuelve su respuesta
+async function answerOfflineOffer(code) {
+  const o = await unpackCode(code);
+  if (o.t !== 'o') throw new Error('Ese código es una respuesta, no una invitación.');
+  const pc = new RTCPeerConnection(RTC);
+  pc.ondatachannel = (ev) => wire(pc, ev.channel);
+  iceLog(pc, 'offline-answer');
+  await pc.setRemoteDescription({ type: 'offer', sdp: sdpOf(o) });
+  await pc.setLocalDescription(await pc.createAnswer());
+  await gatherLocal(pc);
+  const answer = packSdp('a', pc.localDescription.sdp);
+  watchOfflinePair(pc);
+  return answer;
+}
+
+// A: cierra el círculo con la respuesta de B
+async function acceptOfflineAnswer(code) {
+  const o = await unpackCode(code);
+  if (o.t !== 'a') throw new Error('Ese código es una invitación, no una respuesta.');
+  const sdp = sdpOf(o);
+  if (!offlinePc) throw new Error('Genera primero una invitación en este dispositivo.');
+  await offlinePc.setRemoteDescription({ type: 'answer', sdp });
+  watchOfflinePair(offlinePc);
+  offlinePc = null;
+}
+
+/* ---------- auto-actualización ---------- */
+// Una pestaña abierta se queda con el código viejo aunque despleguemos: nadie
+// recarga. /version devuelve la huella del index.html servido; si cambia, la
+// app se recarga sola (y espera si estás escribiendo, para no perder texto).
+let deployedVersion = null, updatePending = false;
+async function checkVersion() {
+  try {
+    const { v } = await (await fetch('/version', { cache: 'no-store' })).json();
+    if (!v) return;
+    if (deployedVersion === null) return void (deployedVersion = v);
+    if (v === deployedVersion) return;
+    updatePending = true;
+    applyUpdate();
+  } catch {} // sin red: se reintenta al siguiente tick
+}
+function applyUpdate() {
+  if (!updatePending) return;
+  if (!$('modal').hidden || !$('ask').hidden) return; // estás editando: luego
+  toast('Nueva versión — actualizando…');
+  setTimeout(() => location.reload(), 1200);
+}
+setInterval(checkVersion, 60_000);
+setInterval(applyUpdate, 5_000); // recarga aplazada: en cuanto cierres el editor
+checkVersion();
+
 /* ---------- arranque ---------- */
 async function enterMain() {
   $('setup').hidden = true;
@@ -2283,8 +3425,19 @@ $('btn-join').onclick = async () => {
     startP2P();
     return;
   }
+  // QR escaneado con la cámara del sistema: el enlace trae el código de
+  // emparejamiento en el hash. Se abre el diálogo con él ya puesto.
+  const pcode = extractPairCode(decodeURIComponent(location.hash.slice(1).replace(/^p=/, '')));
+  if (pcode) history.replaceState(null, '', location.pathname);
+
   meta = await dbGet('meta', 'meta');
-  if (meta) { blocks = await dbAll(); enterMain(); return; }
+  if (meta) {
+    blocks = await dbAll();
+    await enterMain();
+    if (pcode) openPair(pcode);
+    return;
+  }
+  if (pcode) toast('Primero conecta este dispositivo con el enlace secreto; luego pega el código de emparejamiento.', true, 8000);
   const m = location.hash.slice(1).match(/([0-9a-f]{64})\.([0-9a-f]{64})(\.d)?/i);
   // enlace compartido: prellenar; el permiso de recordar ya viene decidido por el owner
   if (m) { $('join-code').value = m[0]; history.replaceState(null, '', location.pathname); $('join-code').scrollIntoView(); }
@@ -2298,8 +3451,10 @@ $('btn-join').onclick = async () => {
 const Brain = { setNotes: () => {}, pulse: () => {}, focus: () => {}, explode: () => {} };
 (async () => {
   let T;
-  try { T = await import('https://unpkg.com/three@0.170.0/build/three.module.js'); }
-  catch { log('sin conexión para three.js — vista simple'); simpleFallback(); return; }
+  // three.js va servido con la app (no desde un CDN): así el cerebro 3D también
+  // funciona sin internet y la política CSP no necesita permitir terceros.
+  try { T = await import('./vendor/three.module.js'); }
+  catch { log('sin three.js — vista simple'); simpleFallback(); return; }
 
   const canvas = $('brain');
   const renderer = new T.WebGLRenderer({ canvas, antialias: true, alpha: true });

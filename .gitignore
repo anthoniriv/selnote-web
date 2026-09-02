@@ -1,0 +1,9 @@
+# macOS
+.DS_Store
+
+# CodeGraph local index
+.codegraph/
+
+# Node.js
+node_modules/
+npm-debug.log*
