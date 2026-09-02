@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
-<title>NotesChain</title>
+<title>Selnote</title>
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self' wss:; worker-src 'self';" />
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%9B%93%3C/text%3E%3C/svg%3E" />
 <!-- instalable como app y arranca sin internet (service worker) -->
@@ -394,7 +394,7 @@
 <canvas id="brain"></canvas>
 
 <div id="topbar">
-  <span class="title">NOTESCHAIN</span>
+  <span class="title">SELNOTE</span>
   <span>rol <b id="role">—</b></span>
   <span>neuronas <b id="height">0</b></span>
   <span>sinapsis <b id="peers">0</b></span>
@@ -540,7 +540,7 @@
 
 <script type="module">
 /* ============================================================
-   NotesChain v2 — nodo completo cifrado en el navegador.
+   Selnote v2 — nodo completo cifrado en el navegador.
    - E2E: AES-256-GCM sobre el contenido; la llave solo viaja en el
      enlace secreto (#fragment — nunca llega a ningún servidor).
    - Descubrimiento ciego: el topic P2P se deriva de la llave de
@@ -556,7 +556,7 @@ import {
 } from './scripts/p2p-validation.mjs';
 
 const $ = (id) => document.getElementById(id);
-const log = (m) => { $('log').textContent = m; console.log('[noteschain]', m); };
+const log = (m) => { $('log').textContent = m; console.log('[selnote]', m); };
 
 // Aviso visible en pantalla (la línea de abajo se corta en móvil). Los errores
 // salen en rojo, sacuden el dispositivo y vibran si el móvil lo permite.
@@ -566,7 +566,7 @@ function toast(msg, isError = false, ms = isError ? 6000 : 3000) {
   el.textContent = msg;
   $('toasts').append(el);
   setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 400); }, ms);
-  console[isError ? 'warn' : 'log']('[noteschain]', msg);
+  console[isError ? 'warn' : 'log']('[selnote]', msg);
   if (isError) shake();
 }
 function shake() {
@@ -652,6 +652,8 @@ const Security = {
   // topic de descubrimiento derivado de la LLAVE, no del chainId:
   // sin llave no puedes ni anunciarte en el mismo canal.
   async topic(keyHex) {
+    // Espacio de nombres heredado del protocolo: cambiarlo separaría a los
+    // pares existentes en otro enjambre. Se conserva por compatibilidad.
     return (await sha256Hex('noteschain-v2-topic:' + keyHex)).slice(0, 40);
   },
 };
@@ -768,6 +770,7 @@ async function verifyChain(blocks, expectedId) {
 /* ---------- IndexedDB ---------- */
 const STORES = ['blocks', 'meta', 'blobs'];
 const openIdb = () => new Promise((res, rej) => {
+  // Nombre heredado de la base: se conserva para abrir los datos locales existentes.
   const r = indexedDB.open('noteschain-v2', 2);
   r.onupgradeneeded = () => {
     const db = r.result;
@@ -1098,14 +1101,14 @@ async function receiveBlock(block, from) {
 // La sentencia de muerte se valida por FIRMA del owner, no por su posición en
 // la cadena: así un lector atrasado (iOS suspendido) también la puede aceptar.
 async function verifyDestroy(block, ownerPubKey) {
-  if (!block || block.type !== 'DESTROY') { console.warn('[noteschain] destroy: tipo inválido', block?.type); return false; }
+  if (!block || block.type !== 'DESTROY') { console.warn('[selnote] destroy: tipo inválido', block?.type); return false; }
   const h = await hashBlock(block);
-  if (h !== block.hash) { console.warn('[noteschain] destroy: hash no coincide', h, block.hash, JSON.stringify(block.payload)); return false; }
+  if (h !== block.hash) { console.warn('[selnote] destroy: hash no coincide', h, block.hash, JSON.stringify(block.payload)); return false; }
   try {
     const ok = await crypto.subtle.verify('Ed25519', await ownerVerifyKey(ownerPubKey), hexBytes(block.signature), enc(block.hash));
-    if (!ok) console.warn('[noteschain] destroy: firma no válida para owner', ownerPubKey.slice(0, 8));
+    if (!ok) console.warn('[selnote] destroy: firma no válida para owner', ownerPubKey.slice(0, 8));
     return ok;
-  } catch (e) { console.warn('[noteschain] destroy: excepción', e.message); return false; }
+  } catch (e) { console.warn('[selnote] destroy: excepción', e.message); return false; }
 }
 
 // El cerebro murió: explosión, aviso, desconexión total y borrado de la
@@ -1488,6 +1491,8 @@ async function onBlobChunk(m) {
 // El primero es NUESTRO (Cloudflare Worker propio) — rápido y siempre disponible;
 // los públicos quedan de respaldo. Ninguno ve datos: solo el apretón de manos.
 const TRACKERS = [
+  // Host heredado de infraestructura: se conserva hasta migrar la señalización;
+  // identifica un endpoint compatible, no la marca visible de la aplicación.
   'wss://noteschain-tracker.onilabs-dev.workers.dev',
   'wss://tracker.openwebtorrent.com',
   'wss://tracker.webtorrent.dev',
@@ -1687,7 +1692,7 @@ function relayFallback(sig) {
 // diagnóstico visible: sin esto un fallo de ICE era indistinguible de "aún negociando"
 function iceLog(pc, tag) {
   pc.oniceconnectionstatechange = () => {
-    console.log('[noteschain] ICE', tag, pc.iceConnectionState);
+    console.log('[selnote] ICE', tag, pc.iceConnectionState);
     if (pc.iceConnectionState === 'failed') chip('pair-fail', 'sin ruta al dispositivo (ICE)', true);
   };
 }
@@ -1776,7 +1781,7 @@ async function onTracker(ws, msg) {
 // Los mensajes de cadena se procesan EN SERIE: evita la carrera donde dos
 // NEW_BLOCK simultáneos pasaban la validación a la vez y duplicaban bloques.
 let rxSeq = Promise.resolve();
-const enqueue = (fn) => { rxSeq = rxSeq.then(fn).catch((e) => console.warn('[noteschain]', e)); };
+const enqueue = (fn) => { rxSeq = rxSeq.then(fn).catch((e) => console.warn('[selnote]', e)); };
 
 // chips de estado (dispositivos emparejando / en línea)
 function chip(id, text, pulse) {
@@ -1844,7 +1849,7 @@ function wire(pc, dc) {
       if (tombstone) {
         try {
           dc.send(JSON.stringify({ t: 'DESTROYED', block: tombstone.block }));
-          console.log('[noteschain] sentencia enviada a', id.slice(0, 4));
+          console.log('[selnote] sentencia enviada a', id.slice(0, 4));
           tombKilled++;
           paintTomb();
           saveTomb();
@@ -3350,7 +3355,7 @@ async function enterMain() {
   // anterior), se descarta y se resincroniza desde la red — nada se pierde,
   // la cadena buena vive en tus otros dispositivos.
   if (blocks.length && (await verifyChain(blocks, meta.chainId))) {
-    console.warn('[noteschain] réplica local corrupta — descartada, resincronizando');
+    console.warn('[selnote] réplica local corrupta — descartada, resincronizando');
     blocks = [];
     await dbWrite((tx) => tx.objectStore('blocks').clear());
   }

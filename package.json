@@ -1,8 +1,8 @@
 {
-  "name": "noteschain-web",
+  "name": "selnote-web",
   "private": true,
   "version": "0.0.0",
-  "description": "Repository governance and offline validation scripts for NotesChain.",
+  "description": "Repository governance and offline validation scripts for Selnote.",
   "type": "module",
   "scripts": {
     "check": "node scripts/check-repository.mjs",

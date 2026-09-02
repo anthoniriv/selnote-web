@@ -12,7 +12,7 @@ const requiredDocuments = [
 ];
 
 function repositoryFixture(html = '<script>const valid = true;</script><img src="assets/logo.svg">') {
-  const root = mkdtempSync(join(tmpdir(), 'noteschain-check-'));
+  const root = mkdtempSync(join(tmpdir(), 'selnote-check-'));
   for (const file of requiredDocuments) {
     const pathname = join(root, file);
     mkdirSync(join(pathname, '..'), { recursive: true });
