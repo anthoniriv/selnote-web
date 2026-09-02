@@ -1,4 +1,4 @@
-const CACHE_NAME = 'noteschain-shell-v1';
+const CACHE_NAME = 'selnote-shell-v1';
 const APP_SHELL = [
   './',
   './index.html',

@@ -1,6 +1,6 @@
 {
-  "name": "NotesChain",
-  "short_name": "NotesChain",
+  "name": "Selnote",
+  "short_name": "Selnote",
   "description": "Notas cifradas y sincronización directa entre dispositivos.",
   "start_url": "./",
   "scope": "./",

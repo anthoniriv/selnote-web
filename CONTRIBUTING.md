@@ -1,6 +1,6 @@
 # Guía de contribución
 
-Gracias por contribuir a NotesChain.
+Gracias por contribuir a Selnote.
 
 ## Flujo de ramas
 
